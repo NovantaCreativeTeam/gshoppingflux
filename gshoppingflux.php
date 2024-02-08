@@ -34,7 +34,7 @@ class GShoppingFlux extends Module
     {
         $this->name = 'gshoppingflux';
         $this->tab = 'smart_shopping';
-        $this->version = '1.7.2';
+        $this->version = '1.7.3';
         $this->author = 'Dim00z';
 
         $this->bootstrap = true;
@@ -2462,8 +2462,8 @@ class GShoppingFlux extends Module
         $currency = new Currency((int) $id_curr);
         $use_tax = ($product['tax_included'] ? true : false);
         $no_tax = (!$use_tax ? true : false);
-        $product['price'] = (float) $p->getPriceStatic($product['id_product'], $use_tax, $combination) * $currency->conversion_rate;
-        $product['price_without_reduct'] = (float) $p->getPriceWithoutReduct($no_tax, $combination) * $currency->conversion_rate;
+        $product['price'] = (float) $p->getPriceStatic($product['id_product'], $use_tax, $combination) * $currency->conversion_rate * ((int)$product['minimal_quantity'] > 0 ? (int)$product['minimal_quantity'] : 1);
+        $product['price_without_reduct'] = (float) $p->getPriceWithoutReduct($no_tax, $combination) * $currency->conversion_rate * ((int)$product['minimal_quantity'] > 0 ? (int)$product['minimal_quantity'] : 1);
         $product['price'] = Tools::ps_round($product['price'], _PS_PRICE_DISPLAY_PRECISION_);
         $product['price_without_reduct'] = Tools::ps_round($product['price_without_reduct'], _PS_PRICE_DISPLAY_PRECISION_);
         if ((float) ($product['price']) < (float) ($product['price_without_reduct'])) {
@@ -2471,6 +2471,11 @@ class GShoppingFlux extends Module
             $xml_googleshopping .= '<g:sale_price>'.$product['price'].' '.$currency->iso_code.'</g:sale_price>'."\n";
         } else {
             $xml_googleshopping .= '<g:price>'.$product['price'].' '.$currency->iso_code.'</g:price>'."\n";
+        }
+
+        if((int)$product['minimal_quantity'] && (int)$product['minimal_quantity'] > 1) {
+            $xml_googleshopping .= '<g:unit_pricing_measure>'.$product['minimal_quantity'].'ct</g:unit_pricing_measure>'."\n";
+            $xml_googleshopping .= '<g:unit_pricing_base_measure>1ct</g:unit_pricing_base_measure>'."\n";
         }
 
         $identifier_exists = 0;
