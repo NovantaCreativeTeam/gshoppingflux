@@ -346,6 +346,7 @@ class GShoppingFlux extends Module
             $updated &= Configuration::updateValue('GS_GENDER', Tools::getValue('gender'), false, (int) $shop_group_id, (int) $shop_id);
             $updated &= Configuration::updateValue('GS_AGE_GROUP', Tools::getValue('age_group'), false, (int) $shop_group_id, (int) $shop_id);
             $updated &= Configuration::updateValue('GS_ATTRIBUTES', Tools::getValue('export_attributes'), false, (int) $shop_group_id, (int) $shop_id);
+            $updated &= Configuration::updateValue('GS_MULTIPLY_PRICE_BY_MINIMAL_QUANTITY', Tools::getValue('multiply_price_by_minimal_quantity'), false, (int) $shop_group_id, (int) $shop_id);
             $updated &= Configuration::updateValue('GS_COLOR', implode(';', Tools::getValue('color')), false, (int) $shop_group_id, (int) $shop_id);
             $updated &= Configuration::updateValue('GS_MATERIAL', implode(';', Tools::getValue('material')), false, (int) $shop_group_id, (int) $shop_id);
             $updated &= Configuration::updateValue('GS_PATTERN', implode(';', Tools::getValue('pattern')), false, (int) $shop_group_id, (int) $shop_id);
@@ -814,6 +815,25 @@ class GShoppingFlux extends Module
                     ),
                     array(
                         'type' => 'switch',
+                        'label' => $this->l('Multiply price by minimal quantity'),
+                        'name' => 'multiply_price_by_minimal_quantity',
+                        'is_bool' => true,
+                        'values' => array(
+                            array(
+                                'id' => 'active_on',
+                                'value' => 1,
+                                'label' => $this->l('Enabled'),
+                            ),
+                            array(
+                                'id' => 'active_off',
+                                'value' => 0,
+                                'label' => $this->l('Disabled'),
+                            ),
+                        ),
+                        'desc' => $this->l('If checked, product price is multiplied by minimal quantity. Google can warning if product price is different from price shown on front end'),
+                    ),
+                    array(
+                        'type' => 'switch',
                         'label' => $this->l('Export products with no GTIN code'),
                         'name' => 'no_gtin',
                         'is_bool' => true,
@@ -1015,6 +1035,7 @@ class GShoppingFlux extends Module
         $gender = '';
         $age_group = '';
         $export_attributes = '';
+        $multiply_price_by_minimal_quantity = '';
         $color = array();
         $material = array();
         $pattern = array();
@@ -1047,6 +1068,7 @@ class GShoppingFlux extends Module
         $gender = Configuration::get('GS_GENDER', 0, $shop_group_id, $shop_id);
         $age_group = Configuration::get('GS_AGE_GROUP', 0, $shop_group_id, $shop_id);
         $export_attributes = Configuration::get('GS_ATTRIBUTES', 0, $shop_group_id, $shop_id);
+        $multiply_price_by_minimal_quantity = Configuration::get('GS_MULTIPLY_PRICE_BY_MINIMAL_QUANTITY', 0, $shop_group_id, $shop_id);
         $color = explode(';', Configuration::get('GS_COLOR', 0, $shop_group_id, $shop_id));
         $material = explode(';', Configuration::get('GS_MATERIAL', 0, $shop_group_id, $shop_id));
         $pattern = explode(';', Configuration::get('GS_PATTERN', 0, $shop_group_id, $shop_id));
@@ -1077,6 +1099,7 @@ class GShoppingFlux extends Module
             'gender' => $gender,
             'age_group' => $age_group,
             'export_attributes' => (int) $export_attributes,
+            'multiply_price_by_minimal_quantity' => (int) $multiply_price_by_minimal_quantity,
             'color[]' => $color,
             'material[]' => $material,
             'pattern[]' => $pattern,
@@ -2462,8 +2485,14 @@ class GShoppingFlux extends Module
         $currency = new Currency((int) $id_curr);
         $use_tax = ($product['tax_included'] ? true : false);
         $no_tax = (!$use_tax ? true : false);
-        $product['price'] = (float) $p->getPriceStatic($product['id_product'], $use_tax, $combination) * $currency->conversion_rate * ((int)$product['minimal_quantity'] > 0 ? (int)$product['minimal_quantity'] : 1);
-        $product['price_without_reduct'] = (float) $p->getPriceWithoutReduct($no_tax, $combination) * $currency->conversion_rate * ((int)$product['minimal_quantity'] > 0 ? (int)$product['minimal_quantity'] : 1);
+
+        $minimal_quantity = 1;
+        if(Configuration::get('GS_MULTIPLY_PRICE_BY_MINIMAL_QUANTITY') && (int) $product['minimal_quantity'] > 1) {
+            $minimal_quantity = (int) $product['minimal_quantity'];
+        }
+
+        $product['price'] = (float) $p->getPriceStatic($product['id_product'], $use_tax, $combination) * $currency->conversion_rate * $minimal_quantity;
+        $product['price_without_reduct'] = (float) $p->getPriceWithoutReduct($no_tax, $combination) * $currency->conversion_rate * $minimal_quantity;
         $product['price'] = Tools::ps_round($product['price'], _PS_PRICE_DISPLAY_PRECISION_);
         $product['price_without_reduct'] = Tools::ps_round($product['price_without_reduct'], _PS_PRICE_DISPLAY_PRECISION_);
         if ((float) ($product['price']) < (float) ($product['price_without_reduct'])) {
@@ -2473,7 +2502,7 @@ class GShoppingFlux extends Module
             $xml_googleshopping .= '<g:price>'.$product['price'].' '.$currency->iso_code.'</g:price>'."\n";
         }
 
-        if((int)$product['minimal_quantity'] && (int)$product['minimal_quantity'] > 1) {
+        if(Configuration::get('GS_MULTIPLY_PRICE_BY_MINIMAL_QUANTITY') && (int)$product['minimal_quantity'] && (int)$product['minimal_quantity'] > 1) {
             $xml_googleshopping .= '<g:unit_pricing_measure>'.$product['minimal_quantity'].'ct</g:unit_pricing_measure>'."\n";
             $xml_googleshopping .= '<g:unit_pricing_base_measure>1ct</g:unit_pricing_base_measure>'."\n";
         }
